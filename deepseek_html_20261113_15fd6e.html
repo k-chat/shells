@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seashell Story — Procedural Growth & Pigmentation</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+      background-color: #0b0e14;
+      color: #eee;
+    }
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(10, 15, 25, 0.75);
+      backdrop-filter: blur(8px);
+      padding: 12px 20px;
+      border-radius: 40px;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      border: 1px solid rgba(255, 220, 180, 0.2);
+      pointer-events: none;
+      z-index: 10;
+    }
+    #caption {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      right: 40px;
+      max-width: 600px;
+      background: rgba(20, 15, 30, 0.8);
+      backdrop-filter: blur(12px);
+      padding: 20px 28px;
+      border-radius: 16px;
+      border-left: 4px solid #d4a373;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transition: opacity 0.4s ease;
+      z-index: 20;
+      pointer-events: none;
+    }
+    #caption h3 {
+      margin: 0 0 8px 0;
+      font-weight: 400;
+      color: #f5e6c8;
+      font-size: 1.3rem;
+      letter-spacing: 1px;
+    }
+    #caption p {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #ccc;
+    }
+    #controls {
+      position: absolute;
+      bottom: 40px;
+      right: 40px;
+      display: flex;
+      gap: 12px;
+      z-index: 30;
+      pointer-events: auto;
+    }
+    button {
+      background: rgba(40, 35, 55, 0.9);
+      border: 1px solid rgba(255, 220, 180, 0.4);
+      color: #f0e0d0;
+      padding: 12px 24px;
+      border-radius: 40px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: all 0.2s ease;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    button:hover {
+      background: rgba(80, 70, 100, 0.9);
+      border-color: #d4a373;
+      transform: scale(1.03);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    #speed-slider {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      background: rgba(20, 15, 30, 0.8);
+      backdrop-filter: blur(8px);
+      padding: 8px 20px;
+      border-radius: 40px;
+      border: 1px solid rgba(255,220,180,0.25);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      color: #ccc;
+      font-size: 0.9rem;
+      pointer-events: auto;
+    }
+    input[type=range] {
+      width: 160px;
+      height: 4px;
+      -webkit-appearance: none;
+      background: #444;
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #d4a373;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 8px #d4a373;
+    }
+    .act-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #555;
+      margin: 0 4px;
+      transition: background 0.3s;
+    }
+    .act-dot.active {
+      background: #d4a373;
+      box-shadow: 0 0 10px #d4a373;
+    }
+    #act-dots {
+      position: absolute;
+      top: 24px;
+      right: 40px;
+      z-index: 20;
+      background: rgba(10, 15, 25, 0.7);
+      padding: 8px 16px;
+      border-radius: 40px;
+      backdrop-filter: blur(6px);
+    }
+  </style>
+</head>
+<body>
+  <div id="info">🐚 SEASHELL STORY · procedural growth & pigmentation</div>
+  <div id="act-dots">
+    <span class="act-dot" data-act="0"></span>
+    <span class="act-dot" data-act="1"></span>
+    <span class="act-dot" data-act="2"></span>
+    <span class="act-dot" data-act="3"></span>
+    <span class="act-dot" data-act="4"></span>
+  </div>
+  <div id="caption">
+    <h3 id="cap-title">The Spiral Path</h3>
+    <p id="cap-text">A shell grows by moving its aperture along a logarithmic helico-spiral. The parameters λr and λz control radial and vertical expansion.</p>
+  </div>
+  <div id="controls">
+    <button id="prevBtn">◀ Previous</button>
+    <button id="nextBtn">Next ▶</button>
+    <button id="resetBtn">⟲ Replay</button>
+  </div>
+  <div id="speed-slider">
+    <span>Speed</span>
+    <input type="range" id="speed" min="0.3" max="2.5" step="0.1" value="1.0">
+    <span id="speedVal">1.0×</span>
+  </div>
+
+  <!-- Import Three.js and lil-gui -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/",
+        "lil-gui": "https://unpkg.com/lil-gui@0.16.0/dist/lil-gui.esm.min.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import GUI from 'lil-gui';
+
+    // ------------------------------------------------------------
+    // 0. Story acts and UI
+    // ------------------------------------------------------------
+    const acts = [
+      {
+        title: 'The Spiral Path',
+        text: 'A shell grows by moving its aperture along a logarithmic helico-spiral. The parameters λr and λz control radial and vertical expansion.',
+        camera: { pos: [0, 2, 8], target: [0, 0, 0] },
+        duration: 8,
+        mode: 'spiral'
+      },
+      {
+        title: 'The Aperture',
+        text: 'The aperture is a Bézier cross-section. It is scaled, oriented by a local frame, and swept along the spiral to form the shell tube.',
+        camera: { pos: [2, 1.5, 4], target: [0.5, 0.2, 0.5] },
+        duration: 8,
+        mode: 'aperture'
+      },
+      {
+        title: 'Building the Surface',
+        text: 'Adjacent sections are connected into a triangle mesh. Consistent winding keeps the normals outward.',
+        camera: { pos: [0, 2, 9], target: [0, 0.5, 0] },
+        duration: 10,
+        mode: 'mesh'
+      },
+      {
+        title: 'Living Pigment',
+        text: 'Reaction-diffusion chemicals — activator and substrate — paint the growing edge. Colours are baked into each new section and never change.',
+        camera: { pos: [1.5, 1, 3.5], target: [0.5, 0.2, 0.5] },
+        duration: 12,
+        mode: 'pigment'
+      },
+      {
+        title: 'The Whole Shell',
+        text: 'The complete shell, grown section by section. Drag to orbit. Press "Replay" to watch it grow again.',
+        camera: { pos: [0, 1.5, 7], target: [0, 0.5, 0] },
+        duration: 0,
+        mode: 'complete'
+      }
+    ];
+
+    let currentAct = 0;
+    let actTimer = 0;
+    let autoAdvance = true;
+    let storySpeed = 1.0;
+
+    // UI elements
+    const capTitle = document.getElementById('cap-title');
+    const capText = document.getElementById('cap-text');
+    const dots = document.querySelectorAll('.act-dot');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedSlider = document.getElementById('speed');
+    const speedVal = document.getElementById('speedVal');
+
+    function updateUIForAct(index) {
+      capTitle.textContent = acts[index].title;
+      capText.textContent = acts[index].text;
+      dots.forEach((d, i) => d.classList.toggle('active', i === index));
+    }
+
+    nextBtn.addEventListener('click', () => {
+      if (currentAct < acts.length - 1) {
+        setAct(currentAct + 1);
+      }
+    });
+    prevBtn.addEventListener('click', () => {
+      if (currentAct > 0) {
+        setAct(currentAct - 1);
+      }
+    });
+    resetBtn.addEventListener('click', () => {
+      resetSimulation();
+      setAct(0);
+    });
+    speedSlider.addEventListener('input', (e) => {
+      storySpeed = parseFloat(e.target.value);
+      speedVal.textContent = storySpeed.toFixed(1) + '×';
+    });
+
+    // ------------------------------------------------------------
+    // 1. Scene setup
+    // ------------------------------------------------------------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0e14);
+    scene.fog = new THREE.FogExp2(0x0b0e14, 0.03);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 2, 8);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = false;
+    document.body.appendChild(renderer.domElement);
+
+    // OrbitControls (enabled only in final act)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = false;
+    controls.enableZoom = true;
+    controls.enabled = false;
+    controls.target.set(0, 0.5, 0);
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xffeedd, 0x222233, 1.0);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffeedd, 1.2);
+    key.position.set(5, 8, 5);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x99aaff, 0.6);
+    fill.position.set(-5, 2, -4);
+    scene.add(fill);
+    const rim = new THREE.PointLight(0xffaa66, 0.5);
+    rim.position.set(2, 3, -3);
+    scene.add(rim);
+
+    // Background dust
+    const dustGeo = new THREE.BufferGeometry();
+    const dustCount = 1200;
+    const dustPos = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount * 3; i += 3) {
+      dustPos[i] = (Math.random() - 0.5) * 40;
+      dustPos[i+1] = (Math.random() - 0.5) * 40;
+      dustPos[i+2] = (Math.random() - 0.5) * 40;
+    }
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    const dustMat = new THREE.PointsMaterial({ color: 0x8899aa, size: 0.08, transparent: true, opacity: 0.4 });
+    const dust = new THREE.Points(dustGeo, dustMat);
+    scene.add(dust);
+
+    // Groups
+    const growthGroup = new THREE.Group();
+    scene.add(growthGroup);
+
+    // ------------------------------------------------------------
+    // 2. Shell parameters (from doc §1, §3, §7)
+    // ------------------------------------------------------------
+    const params = {
+      // geometry
+      r0: 1.0,
+      z0: 0.5,
+      lambdaR: 1.028,
+      lambdaZ: 1.028,
+      growthSteps: 800,
+      aperturePoints: 100,
+      dT: 0.14,
+      scale0: 0.06,
+      scaleGrowth: 1.027,
+
+      // pigmentation (RD)
+      dt: 0.008,
+      dx: 1.0,
+      rho: 0.012,
+      rho0: 0.0012,
+      mu: 0.012,
+      nu: 0.0,
+      Da: 0.002,
+      Ds: 0.38,
+      sigma: 0.016,
+      kappa: 0.0,
+      rdStepsPerSection: 18,
+
+      // visual
+      showWireframe: false,
+      autoRotate: false
+    };
+
+    // ------------------------------------------------------------
+    // 3. Growth functions
+    // ------------------------------------------------------------
+    function helicoSpiral(t, p) {
+      const r = p.r0 * Math.pow(p.lambdaR, t);
+      const z = p.z0 * Math.pow(p.lambdaZ, t);
+      return new THREE.Vector3(r * Math.cos(t), z, r * Math.sin(t));
+    }
+
+    // parallel-transport-like frame (stable)
+    function localFrame(t, p) {
+      const eps = 1e-3;
+      const h = helicoSpiral(t, p);
+      const h1 = helicoSpiral(t + eps, p);
+      const h2 = helicoSpiral(t - eps, p);
+      const tangent = h1.clone().sub(h2).normalize();
+
+      // Use arbitrary up to get a stable normal
+      let up = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(tangent.dot(up)) > 0.99) up = new THREE.Vector3(1, 0, 0);
+      const binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+
+      const m = new THREE.Matrix4();
+      m.makeBasis(normal, binormal, tangent);
+      return m;
+    }
+
+    function scaleAt(t, p) {
+      return p.scale0 * Math.pow(p.scaleGrowth, t);
+    }
+
+    // aperture: a simple oval/rounded profile (cubic bezier sampled)
+    function createAperturePoints(N) {
+      const pts = [];
+      // control points for a rounded rectangle / oval in local XY
+      const P0 = new THREE.Vector2(-0.8, -0.4);
+      const P1 = new THREE.Vector2(-0.8, 0.8);
+      const P2 = new THREE.Vector2(0.8, 0.8);
+      const P3 = new THREE.Vector2(0.8, -0.4);
+      const P4 = new THREE.Vector2(0.8, -0.8);
+      const P5 = new THREE.Vector2(-0.8, -0.8);
+      // combine two cubic beziers for closed loop
+      const bezier = (p0, p1, p2, p3, s) => {
+        const u = 1 - s;
+        const x = u*u*u*p0.x + 3*u*u*s*p1.x + 3*u*s*s*p2.x + s*s*s*p3.x;
+        const y = u*u*u*p0.y + 3*u*u*s*p1.y + 3*u*s*s*p2.y + s*s*s*p3.y;
+        return new THREE.Vector2(x, y);
+      };
+      for (let i = 0; i < N; i++) {
+        const t = i / N;
+        let v;
+        if (t < 0.5) {
+          v = bezier(P0, P1, P2, P3, t * 2);
+        } else {
+          v = bezier(P3, P4, P5, P0, (t - 0.5) * 2);
+        }
+        pts.push(v);
+      }
+      return pts;
+    }
+
+    const baseAperture2D = createAperturePoints(params.aperturePoints);
+
+    function transformAperture(pts2D, center, frame, scale) {
+      return pts2D.map(p => {
+        const v = new THREE.Vector3(p.x * scale, p.y * scale, 0);
+        v.applyMatrix4(frame).add(center);
+        return v;
+      });
+    }
+
+    // ------------------------------------------------------------
+    // 4. Reaction-diffusion simulation (from doc §3.3)
+    // ------------------------------------------------------------
+    class PigmentSim {
+      constructor(N, params) {
+        this.N = N;
+        this.p = params;
+        this.a = new Float32Array(N).fill(0.1);
+        this.s = new Float32Array(N).fill(0.5);
+        // small noise
+        for (let i = 0; i < N; i++) {
+          this.a[i] += (Math.random() - 0.5) * 0.004;
+        }
+      }
+
+      step() {
+        const N = this.N;
+        const p = this.p;
+        const a = this.a;
+        const s = this.s;
+        const dt = p.dt;
+        const dx2 = p.dx * p.dx;
+
+        const newA = new Float32Array(N);
+        const newS = new Float32Array(N);
+
+        for (let i = 0; i < N; i++) {
+          const prev = (i - 1 + N) % N;
+          const next = (i + 1) % N;
+
+          const lapA = (a[prev] - 2 * a[i] + a[next]) / dx2;
+          const lapS = (s[prev] - 2 * s[i] + s[next]) / dx2;
+
+          const R = p.rho * s[i] * (a[i] * a[i] / (1 + p.kappa * a[i] * a[i]) + p.rho0);
+
+          const da = R - p.mu * a[i] + p.Da * lapA;
+          const ds = p.sigma - R - p.nu * s[i] + p.Ds * lapS;
+
+          newA[i] = Math.max(0, a[i] + dt * da);
+          newS[i] = Math.max(0, s[i] + dt * ds);
+        }
+
+        this.a = newA;
+        this.s = newS;
+      }
+
+      getActivator() {
+        return this.a;
+      }
+    }
+
+    // Colour palette from doc §3.4 / §6
+    const palette = [
+      { stop: 0.00, color: new THREE.Color('#f5e6c8') },
+      { stop: 0.25, color: new THREE.Color('#d4a373') },
+      { stop: 0.55, color: new THREE.Color('#8b5a2b') },
+      { stop: 0.80, color: new THREE.Color('#5a2e0e') },
+      { stop: 1.00, color: new THREE.Color('#2a1206') }
+    ];
+
+    function colorFromActivator(a) {
+      // normalize roughly between 0.05 and 0.7 for visual contrast
+      let u = (a - 0.05) / 0.65;
+      u = Math.min(1, Math.max(0, u));
+      for (let i = 1; i < palette.length; i++) {
+        if (u <= palette[i].stop) {
+          const f = (u - palette[i-1].stop) / (palette[i].stop - palette[i-1].stop);
+          return palette[i-1].color.clone().lerp(palette[i].color, f);
+        }
+      }
+      return palette[palette.length - 1].color.clone();
+    }
+
+    // ------------------------------------------------------------
+    // 5. Shell mesh building (pre-allocated, progressive)
+    // ------------------------------------------------------------
+    let shellMesh = null;
+    let wireOverlay = null;
+    let spiralLine = null;
+    let apertureRig = null;
+    let bezierLine = null;
+
+    let sectionsBuilt = 0;
+    const MAX_SECTIONS = params.growthSteps;
+    const N_APERTURE = params.aperturePoints;
+
+    // Pre-allocate geometry arrays
+    const totalVertices = MAX_SECTIONS * N_APERTURE;
+    const positions = new Float32Array(totalVertices * 3);
+    const colors = new Float32Array(totalVertices * 3);
+    const indices = [];
+
+    // Pre-build indices (will be revealed gradually via setDrawRange)
+    for (let i = 0; i < MAX_SECTIONS - 1; i++) {
+      for (let j = 0; j < N_APERTURE; j++) {
+        const jn = (j + 1) % N_APERTURE;
+        const a = i * N_APERTURE + j;
+        const b = i * N_APERTURE + jn;
+        const c = (i + 1) * N_APERTURE + j;
+        const d = (i + 1) * N_APERTURE + jn;
+        // two triangles
+        indices.push(a, b, d);
+        indices.push(a, d, c);
+      }
+    }
+
+    const shellGeo = new THREE.BufferGeometry();
+    shellGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    shellGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    shellGeo.setIndex(indices);
+    shellGeo.setDrawRange(0, 0);
+
+    const shellMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      roughness: 0.55,
+      metalness: 0.1,
+      flatShading: false,
+      emissive: new THREE.Color(0x221100),
+      emissiveIntensity: 0.1
+    });
+
+    shellMesh = new THREE.Mesh(shellGeo, shellMat);
+    growthGroup.add(shellMesh);
+
+    // Wireframe overlay (optional, toggled)
+    wireOverlay = new THREE.LineSegments(
+      new THREE.WireframeGeometry(shellGeo),
+      new THREE.LineBasicMaterial({ color: 0xd4a373, opacity: 0.15, transparent: true })
+    );
+    wireOverlay.visible = false;
+    growthGroup.add(wireOverlay);
+
+    // Spiral line (Act 1)
+    const spiralPoints = [];
+    for (let t = 0; t < 5.5 * Math.PI * 2; t += 0.05) {
+      spiralPoints.push(helicoSpiral(t, params));
+    }
+    const spiralGeo = new THREE.BufferGeometry().setFromPoints(spiralPoints);
+    const spiralMat = new THREE.LineBasicMaterial({ color: 0xd4a373, opacity: 0.8, transparent: true });
+    spiralLine = new THREE.Line(spiralGeo, spiralMat);
+    growthGroup.add(spiralLine);
+
+    // Aperture rig (Act 2)
+    apertureRig = new THREE.Group();
+    const aperturePts3D = baseAperture2D.map(p => new THREE.Vector3(p.x, p.y, 0));
+    const apertureCurve = new THREE.CatmullRomCurve3(aperturePts3D, true);
+    const apertureLineGeo = new THREE.BufferGeometry().setFromPoints(apertureCurve.getPoints(100));
+    const apertureLineMat = new THREE.LineBasicMaterial({ color: 0xffaa66, linewidth: 1 });
+    bezierLine = new THREE.Line(apertureLineGeo, apertureLineMat);
+    apertureRig.add(bezierLine);
+    growthGroup.add(apertureRig);
+
+    // ------------------------------------------------------------
+    // 6. Simulation state
+    // ------------------------------------------------------------
+    let growthT = 0;
+    let rdSim = new PigmentSim(N_APERTURE, params);
+    let lastSectionT = -1;
+
+    function resetSimulation() {
+      sectionsBuilt = 0;
+      growthT = 0;
+      lastSectionT = -1;
+      shellGeo.setDrawRange(0, 0);
+      positions.fill(0);
+      colors.fill(0);
+      shellGeo.attributes.position.needsUpdate = true;
+      shellGeo.attributes.color.needsUpdate = true;
+      rdSim = new PigmentSim(N_APERTURE, params);
+      currentAct = 0;
+      updateUIForAct(0);
+      autoAdvance = true;
+      actTimer = 0;
+      controls.enabled = false;
+      // reset camera
+      camera.position.set(0, 2, 8);
+      controls.target.set(0, 0, 0);
+    }
+
+    // ------------------------------------------------------------
+    // 7. Build next section (called every frame if growthT advances)
+    // ------------------------------------------------------------
+    function buildNextSection(t) {
+      if (sectionsBuilt >= MAX_SECTIONS) return;
+
+      const center = helicoSpiral(t, params);
+      const frame = localFrame(t, params);
+      const scale = scaleAt(t, params);
+
+      const section3D = transformAperture(baseAperture2D, center, frame, scale);
+
+      // Write vertices into buffer
+      const vertOffset = sectionsBuilt * N_APERTURE;
+      for (let j = 0; j < N_APERTURE; j++) {
+        const v = section3D[j];
+        positions[(vertOffset + j) * 3 + 0] = v.x;
+        positions[(vertOffset + j) * 3 + 1] = v.y;
+        positions[(vertOffset + j) * 3 + 2] = v.z;
+      }
+
+      // Advance pigmentation (several steps per section)
+      for (let s = 0; s < params.rdStepsPerSection; s++) {
+        rdSim.step();
+      }
+
+      // Assign colours from current activator field
+      const actVals = rdSim.getActivator();
+      for (let j = 0; j < N_APERTURE; j++) {
+        const col = colorFromActivator(actVals[j]);
+        colors[(vertOffset + j) * 3 + 0] = col.r;
+        colors[(vertOffset + j) * 3 + 1] = col.g;
+        colors[(vertOffset + j) * 3 + 2] = col.b;
+      }
+
+      sectionsBuilt++;
+
+      // Update draw range (two triangles per quad, N_APERTURE quads per section)
+      const indexCount = (sectionsBuilt - 1) * N_APERTURE * 6;
+      shellGeo.setDrawRange(0, indexCount);
+      shellGeo.attributes.position.needsUpdate = true;
+      shellGeo.attributes.color.needsUpdate = true;
+      shellGeo.computeVertexNormals();
+
+      // Update wireframe if visible
+      if (wireOverlay.visible) {
+        wireOverlay.geometry.dispose();
+        wireOverlay.geometry = new THREE.WireframeGeometry(shellGeo);
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 8. Act switching
+    // ------------------------------------------------------------
+    function setAct(index) {
+      if (index === currentAct && index !== 0) return;
+      currentAct = index;
+      updateUIForAct(index);
+      actTimer = 0;
+      autoAdvance = true;
+
+      // Camera animation targets
+      const act = acts[index];
+      const targetPos = new THREE.Vector3(...act.camera.pos);
+      const targetLook = new THREE.Vector3(...act.camera.target);
+
+      // Animate camera smoothly
+      const startPos = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const duration = 1.2;
+      let elapsed = 0;
+
+      function animateCamera() {
+        elapsed += 0.016 * storySpeed;
+        const t = Math.min(1, elapsed / duration);
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        camera.position.lerpVectors(startPos, targetPos, eased);
+        controls.target.lerpVectors(startTarget, targetLook, eased);
+        camera.lookAt(controls.target);
+        if (t < 1) requestAnimationFrame(animateCamera);
+      }
+      animateCamera();
+
+      // Mode-specific setup
+      if (act.mode === 'complete') {
+        controls.enabled = true;
+        growthT = MAX_SECTIONS * params.dT + 1; // ensure full growth
+        // build all remaining sections instantly
+        while (sectionsBuilt < MAX_SECTIONS) {
+          buildNextSection(sectionsBuilt * params.dT);
+        }
+        shellGeo.setDrawRange(0, (MAX_SECTIONS - 1) * N_APERTURE * 6);
+      } else {
+        controls.enabled = false;
+      }
+
+      if (act.mode === 'spiral') {
+        // show spiral, hide shell
+        shellMesh.visible = false;
+        wireOverlay.visible = false;
+        apertureRig.visible = false;
+        spiralLine.visible = true;
+      } else if (act.mode === 'aperture') {
+        shellMesh.visible = false;
+        wireOverlay.visible = false;
+        spiralLine.visible = true;
+        apertureRig.visible = true;
+      } else if (act.mode === 'mesh') {
+        shellMesh.visible = true;
+        wireOverlay.visible = params.showWireframe;
+        spiralLine.visible = false;
+        apertureRig.visible = false;
+      } else if (act.mode === 'pigment') {
+        shellMesh.visible = true;
+        wireOverlay.visible = false;
+        spiralLine.visible = false;
+        apertureRig.visible = false;
+      } else {
+        shellMesh.visible = true;
+        wireOverlay.visible = false;
+        spiralLine.visible = false;
+        apertureRig.visible = false;
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 9. Animation loop
+    // ------------------------------------------------------------
+    let clock = new THREE.Clock();
+
+    function animate() {
+      const delta = Math.min(clock.getDelta(), 0.05);
+      const act = acts[currentAct];
+
+      // Update dust rotation
+      dust.rotation.y += 0.0002;
+
+      // Auto-advance acts (except last)
+      if (autoAdvance && currentAct < acts.length - 1) {
+        actTimer += delta * storySpeed;
+        if (actTimer > act.duration) {
+          setAct(currentAct + 1);
+        }
+      }
+
+      // Growth simulation (only when in growth acts)
+      if (act.mode !== 'complete') {
+        const targetGrowthT = Math.min(growthT + delta * storySpeed * 1.8, MAX_SECTIONS * params.dT);
+        growthT = targetGrowthT;
+
+        // Build sections as needed
+        while (sectionsBuilt < MAX_SECTIONS &&
+               sectionsBuilt * params.dT < growthT) {
+          buildNextSection(sectionsBuilt * params.dT);
+        }
+
+        // Update aperture rig position
+        if (act.mode === 'spiral' || act.mode === 'aperture') {
+          const t = Math.min(growthT, 5.5 * Math.PI * 2);
+          const center = helicoSpiral(t, params);
+          const frame = localFrame(t, params);
+          const scale = scaleAt(t, params);
+
+          apertureRig.position.copy(center);
+          apertureRig.quaternion.setFromRotationMatrix(frame);
+          apertureRig.scale.setScalar(scale);
+          bezierLine.scale.setScalar(1.0); // base line is unit-ish
+
+          // Also update spiral line visibility
+          spiralLine.visible = true;
+        }
+      }
+
+      // Auto-rotate final shell
+      if (act.mode === 'complete' && params.autoRotate) {
+        growthGroup.rotation.y += delta * 0.2;
+      }
+
+      // Update controls
+      if (controls.enabled) {
+        controls.update();
+      }
+
+      // Render
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    // ------------------------------------------------------------
+    // 10. GUI for parameters
+    // ------------------------------------------------------------
+    const gui = new GUI({ title: 'Shell Parameters', width: 300 });
+    gui.add(params, 'lambdaR', 1.005, 1.08, 0.001).name('λr (radial)').onChange(() => resetSimulation());
+    gui.add(params, 'lambdaZ', 1.005, 1.08, 0.001).name('λz (vertical)').onChange(() => resetSimulation());
+    gui.add(params, 'growthSteps', 200, 1200, 50).name('sections').onChange(() => resetSimulation());
+    gui.add(params, 'rho', 0.005, 0.03, 0.001).name('ρ (reaction)');
+    gui.add(params, 'mu', 0.005, 0.03, 0.001).name('μ (decay)');
+    gui.add(params, 'Da', 0.001, 0.01, 0.0005).name('Da (activator diff)');
+    gui.add(params, 'Ds', 0.1, 1.0, 0.05).name('Ds (substrate diff)');
+    gui.add(params, 'showWireframe').name('wireframe').onChange(v => {
+      if (currentAct === 2) wireOverlay.visible = v;
+    });
+    gui.add(params, 'autoRotate').name('auto-rotate');
+
+    // ------------------------------------------------------------
+    // 11. Init & resize
+    // ------------------------------------------------------------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start at act 0
+    setAct(0);
+    resetSimulation();
+    animate();
+  </script>
+</body>
+</html>
