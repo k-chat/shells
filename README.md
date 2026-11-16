@@ -73,4 +73,10 @@ The test suite checks the expansion law, derived whorl counts, umbilicus/clearan
 
 <https://k-chat.github.io/shells/>
 
-Every push to `main` runs the tests, builds the site, and deploys it to GitHub Pages via [.github/workflows/pages.yml](./.github/workflows/pages.yml).
+The site is a static Vite build published from the `gh-pages` branch. To refresh it after a change:
+
+```sh
+npm test
+npm run build
+npx gh-pages -d dist   # or copy dist/ onto the gh-pages branch
+```
